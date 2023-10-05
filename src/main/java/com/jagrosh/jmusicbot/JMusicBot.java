@@ -15,9 +15,10 @@
  */
 package com.jagrosh.jmusicbot;
 
-import com.jagrosh.jdautilities.command.CommandClientBuilder;
+import com.jagrosh.jdautilities.command.Command.Category;
+import java.util.function.Consumer;
+import com.jagrosh.jdautilities.command.*;
 import com.jagrosh.jdautilities.commons.waiter.EventWaiter;
-import com.jagrosh.jdautilities.examples.command.*;
 import com.jagrosh.jmusicbot.commands.admin.*;
 import com.jagrosh.jmusicbot.commands.dj.*;
 import com.jagrosh.jmusicbot.commands.general.*;
@@ -28,10 +29,15 @@ import com.jagrosh.jmusicbot.gui.GUI;
 import com.jagrosh.jmusicbot.settings.SettingsManager;
 import com.jagrosh.jmusicbot.utils.OtherUtil;
 import java.awt.Color;
+import java.util.List;
+import java.util.Objects;
 import java.util.Arrays;
+
 import javax.security.auth.login.LoginException;
 import net.dv8tion.jda.api.*;
 import net.dv8tion.jda.api.entities.Activity;
+import net.dv8tion.jda.api.entities.ChannelType;
+import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
 import net.dv8tion.jda.api.exceptions.ErrorResponseException;
@@ -86,13 +92,9 @@ public class JMusicBot {
         SettingsManager settings = new SettingsManager();
         Bot bot = new Bot(waiter, config, settings);
 
-        AboutCommand aboutCommand = new AboutCommand(Color.BLUE.brighter(),
-                "a music bot that is [easy to host yourself!](https://github.com/jagrosh/MusicBot) (v"
-                        + OtherUtil.getCurrentVersion() + ")",
-                new String[] { "High-quality music playback", "FairQueue™ Technology", "Easy to host yourself" },
+        AboutCmd aboutCmd = new AboutCmd(Color.BLUE.brighter(),
+                "しょういのミュージックボットです。", // DESC HERE
                 RECOMMENDED_PERMS);
-        aboutCommand.setIsAuthor(false);
-        aboutCommand.setReplacementCharacter("\uD83C\uDFB6"); // 🎶
 
         // set up the command client
         CommandClientBuilder cb = new CommandClientBuilder()
@@ -103,8 +105,8 @@ public class JMusicBot {
                 .setHelpWord(config.getHelp())
                 .setLinkedCacheSize(200)
                 .setGuildSettingsManager(settings)
-                .addCommands(aboutCommand,
-                        new PingCommand(),
+                .addCommands(aboutCmd,
+                        new PingCmd(),
                         new SettingsCmd(bot),
 
                         new LyricsCmd(bot),
@@ -142,6 +144,45 @@ public class JMusicBot {
                         new SetnameCmd(bot),
                         new SetstatusCmd(bot),
                         new ShutdownCmd(bot));
+
+        CommandClient build = cb.build();
+        List<Command> commands = build.getCommands();
+        String textPrefix = build.getTextualPrefix();
+        String prefix = build.getPrefix();
+        String ownerId = build.getOwnerId();
+        String serverInvite = build.getServerInvite();
+
+        Consumer<CommandEvent> helpConsumer = event -> {
+            StringBuilder builder = new StringBuilder("**" + event.getSelfUser().getName() + "**のコマンド:\n");
+            Category category = null;
+            for (Command command : commands) {
+                if (!command.isHidden() && (!command.isOwnerCommand() || event.isOwner())) {
+                    if (!Objects.equals(category, command.getCategory())) {
+                        category = command.getCategory();
+                        builder.append("\n\n  __").append(category == null ? "カテゴリなし" : category.getName())
+                                .append("__:\n");
+                    }
+                    builder.append("\n`").append(textPrefix).append(prefix == null ? " " : "").append(command.getName())
+                            .append(command.getArguments() == null ? "`" : " " + command.getArguments() + "`")
+                            .append(" - ").append(command.getHelp());
+                }
+            }
+            User owner = event.getJDA().getUserById(ownerId);
+            if (owner != null) {
+                builder.append("\n\nヘルプを求めたいのなら、**").append(owner.getName()).append("**#")
+                        .append(owner.getDiscriminator());
+                if (serverInvite != null)
+                    builder.append("または、").append(serverInvite);
+                builder.append("を連絡してください。");
+            }
+            event.replyInDm(builder.toString(), unused -> {
+                if (event.isFromType(ChannelType.TEXT))
+                    event.reactSuccess();
+            }, t -> event.replyWarning("ダイレクトメッセージをブロックしているため、ヘルプメッセージを送れませんでした。"));
+        };
+
+        cb.setHelpConsumer(helpConsumer);
+
         if (config.useEval())
             cb.addCommand(new EvalCmd(bot));
         boolean nogame = false;
