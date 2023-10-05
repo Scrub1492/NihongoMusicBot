@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/github/license/jagrosh/MusicBot.svg)](https://github.com/jagrosh/MusicBot/blob/master/LICENSE)
 
 This is a fork of JMusicBot made for the Discord server まったりにほんご。
-
+Translation made by [Shoui](https://github.com/shoui520).
 ## Build process
 1. Clone this repository.
   このリポジトリをクローンする。
